@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enhancement One: Software Design and Engineering | Lyth Hammad</title>
+<meta name="description" content="ePortfolio for Lyth Hammad, Computer Science capstone (CS 499).">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header>
+  <div class="wrap wide">
+    <p class="name">Lyth Hammad</p>
+    <p class="tagline">Computer Science ePortfolio &middot; CS 499 Capstone</p>
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="index.html">Professional Self-Assessment</a></li>
+        <li><a href="enhancement1.html" aria-current="page">Enhancement 1: Software Design and Engineering</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap wide">
+<h1>Enhancement One: Software Design and Engineering</h1>
+<p class="sub">Artifact: XPLR backend API (Hack Reactor, 2023)</p>
+<section>
+<h2>Original and Enhanced Code</h2>
+<p>Each file is shown before and after the enhancement. Download links open the plain files.</p>
+<h3>main.py</h3>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement1/original/main.py" download>download</a></p>
+<pre tabindex="0"><code>from fastapi import FastAPI
+from authenticator import authenticator
+from fastapi.middleware.cors import CORSMiddleware
+from routers import accounts, favorites, parks, reviews
+import os
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        os.environ.get("CORS_HOST", "http://localhost:3000"),
+        os.environ.get("CORS_HOST", "http://localhost:8000")
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+app.include_router(authenticator.router, tags=["Auth"])
+app.include_router(accounts.router, tags=["Auth"])
+app.include_router(favorites.router, tags=["Favorites"])
+app.include_router(parks.router, tags=["Parks"])
+app.include_router(reviews.router, tags=["Reviews"])</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement1/enhanced/main.py" download>download</a></p>
+<pre tabindex="0"><code>import os
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from authenticator import authenticator
+from routers import accounts, favorites, parks, reviews
+
+# Local development origins, used only when CORS_HOST is not set.
+DEFAULT_ORIGINS = ["http://localhost:3000", "http://localhost:8000"]
+
+# Only the HTTP methods and headers the frontend actually needs.
+ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+ALLOWED_HEADERS = ["Content-Type", "Authorization", "Accept"]
+
+
+def get_allowed_origins() -&gt; list[str]:
+    """
+    Build the list of allowed CORS origins.
+
+    CORS_HOST may hold one origin or several separated by commas.
+    Blank entries are ignored, and if nothing is set we fall back to
+    the local development origins.
+    """
+    raw = os.environ.get("CORS_HOST", "")
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or DEFAULT_ORIGINS
+
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS,
+)
+
+app.include_router(authenticator.router, tags=["Auth"])
+app.include_router(accounts.router, tags=["Auth"])
+app.include_router(favorites.router, tags=["Favorites"])
+app.include_router(parks.router, tags=["Parks"])
+app.include_router(reviews.router, tags=["Reviews"])</code></pre>
+</div>
+</div>
+<h3>authenticator.py</h3>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement1/original/authenticator.py" download>download</a></p>
+<pre tabindex="0"><code>import os
+from fastapi import Depends
+from jwtdown_fastapi.authentication import Authenticator
+from queries.accounts import AccountQueries
+from models.accounts import AccountOut, Account
+
+
+class MyAuthenticator(Authenticator):
+    async def get_account_data(
+        self,
+        username: str,
+        accounts: AccountQueries,
+    ):
+        # Use your repo to get the account based on the
+        # username (which could be an email)
+        return accounts.get_user_account(username)
+
+    def get_account_getter(
+        self,
+        accounts: AccountQueries = Depends(),
+    ):
+        # Return the accounts. That's it.
+        return accounts
+
+    def get_hashed_password(self, account: Account):
+        # Return the encrypted password value from your
+        # account object
+
+        return account.hashed_password
+
+    def get_account_data_for_cookie(self, account: AccountOut):
+        # Return the username and the data for the cookie.
+        # You must return TWO values from this method.
+        return account.username, AccountOut(**account.dict())
+
+
+authenticator = MyAuthenticator(os.environ["SIGNING_KEY"])</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement1/enhanced/authenticator.py" download>download</a></p>
+<pre tabindex="0"><code>import logging
+import os
+
+from fastapi import Depends, HTTPException, status
+from jwtdown_fastapi.authentication import Authenticator
+
+from models.accounts import Account, AccountOut
+from queries.accounts import AccountQueries
+
+logger = logging.getLogger(__name__)
+
+
+class MyAuthenticator(Authenticator):
+    async def get_account_data(
+        self,
+        username: str,
+        accounts: AccountQueries,
+    ):
+        # Basic input validation: reject empty/blank usernames before
+        # they ever reach the database layer.
+        if not username or not username.strip():
+            logger.warning("Login attempt with empty username.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username is required.",
+            )
+
+        try:
+            account = accounts.get_user_account(username)
+        except Exception:
+            # Don't let a database failure surface as a raw,
+            # unhandled 500 with no record of what happened.
+            logger.exception(
+                "Error retrieving account data for username: %s", username
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to process login at this time.",
+            )
+
+        return account
+
+    def get_account_getter(
+        self,
+        accounts: AccountQueries = Depends(),
+    ):
+        # Return the accounts. That's it.
+        return accounts
+
+    def get_hashed_password(self, account: Account):
+        # Return the encrypted password value from your
+        # account object
+        if not account or not getattr(account, "hashed_password", None):
+            logger.warning("get_hashed_password called with an invalid account.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid account credentials.",
+            )
+        return account.hashed_password
+
+    def get_account_data_for_cookie(self, account: AccountOut):
+        # Return the username and the data for the cookie.
+        # You must return TWO values from this method.
+        return account.username, AccountOut(**account.dict())
+
+
+authenticator = MyAuthenticator(os.environ["SIGNING_KEY"])</code></pre>
+</div>
+</div>
+<h3>accounts.py</h3>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement1/original/accounts.py" download>download</a></p>
+<pre tabindex="0"><code>from fastapi import (
+    Depends,
+    HTTPException,
+    status,
+    Response,
+    APIRouter,
+    Request,
+)
+from authenticator import authenticator
+from queries.accounts import AccountQueries, DuplicateAccountError
+from models.accounts import (
+    AccountIn,
+    AccountOut,
+    AccountList,
+    AccountForm,
+    AccountToken,
+    HttpError
+)
+
+router = APIRouter()
+
+
+@router.post("/api/accounts", response_model=AccountToken | HttpError)
+async def create_account(
+    info: AccountIn,
+    request: Request,
+    response: Response,
+    accounts: AccountQueries = Depends(),
+):
+    hashed_password = authenticator.hash_password(info.password)
+    try:
+        account = accounts.create_account(info, hashed_password)
+    except DuplicateAccountError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists",
+        )
+    form = AccountForm(username=info.username, password=info.password)
+    token = await authenticator.login(response, request, form, accounts)
+    return AccountToken(account=account, **token.dict())
+
+
+@router.get("/token", response_model=AccountToken | None)
+async def get_token(
+    request: Request,
+    account: AccountOut = Depends(authenticator.try_get_current_account_data)
+) -&gt; AccountToken | None:
+    if account and authenticator.cookie_name in request.cookies:
+        return {
+            "access_token": request.cookies[authenticator.cookie_name],
+            "type": "Bearer",
+            "account": account,
+        }
+
+
+@router.get('/api/accounts', response_model=AccountList)
+def accounts_list(
+    queries: AccountQueries = Depends()
+):
+    return {
+        "accounts": queries.get_all_accounts()
+    }</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement1/enhanced/accounts.py" download>download</a></p>
+<pre tabindex="0"><code>import logging
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
+
+from authenticator import authenticator
+from models.accounts import (
+    AccountForm,
+    AccountIn,
+    AccountList,
+    AccountOut,
+    AccountToken,
+    HttpError,
+)
+from queries.accounts import AccountQueries, DuplicateAccountError
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@router.post("/api/accounts", response_model=AccountToken | HttpError)
+async def create_account(
+    info: AccountIn,
+    request: Request,
+    response: Response,
+    accounts: AccountQueries = Depends(),
+):
+    # Basic input validation/sanitization beyond what Pydantic already
+    # guarantees at the type level.
+    username = info.username.strip() if info.username else ""
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username cannot be empty.",
+        )
+    if not info.password or len(info.password) &lt; 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long.",
+        )
+    info.username = username
+
+    hashed_password = authenticator.hash_password(info.password)
+
+    try:
+        account = accounts.create_account(info, hashed_password)
+    except DuplicateAccountError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists",
+        )
+    except Exception:
+        # Anything other than a duplicate account was previously an
+        # unhandled 500 with no record of what went wrong.
+        logger.exception(
+            "Unexpected error creating account for username: %s", username
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to create account at this time.",
+        )
+
+    form = AccountForm(username=info.username, password=info.password)
+
+    try:
+        token = await authenticator.login(response, request, form, accounts)
+    except Exception:
+        logger.exception(
+            "Account created but login failed for username: %s", username
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Account created, but automatic login failed. Please log in.",
+        )
+
+    return AccountToken(account=account, **token.dict())
+
+
+@router.get("/token", response_model=AccountToken | None)
+async def get_token(
+    request: Request,
+    account: AccountOut = Depends(authenticator.try_get_current_account_data),
+) -&gt; AccountToken | None:
+    # Explicit return in every branch, matching the declared response
+    # model instead of relying on an implicit None.
+    if account and authenticator.cookie_name in request.cookies:
+        return AccountToken(
+            access_token=request.cookies[authenticator.cookie_name],
+            type="Bearer",
+            account=account,
+        )
+    return None
+
+
+@router.get("/api/accounts", response_model=AccountList)
+def accounts_list(queries: AccountQueries = Depends()):
+    try:
+        return {"accounts": queries.get_all_accounts()}
+    except Exception:
+        logger.exception("Unexpected error retrieving account list.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to retrieve accounts at this time.",
+        )</code></pre>
+</div>
+</div>
+</section>
+<section class="prose">
+<h2>Artifact Description</h2>
+<p>For this assignment, I have selected the project XPLR which is a full-stack web app that I made in 2023 as my last Hack Reactor project together with four other developers. It is a national parks discovery app that is designed for outdoor enthusiasts who want to get more familiar with the national parks in the Americas. This application displays an image of each national park, an embedded Google Map of the park’s location, and the weather information of the location of the park. Users are allowed to make accounts on this app, sign in, and add those parks to a personal favorite list that is connected to the account of the user. The user will navigate through the app by choosing a particular park and landing on the details page of the selected park. It includes a brief description of the selected park.</p>
+</section>
+<section class="prose">
+<h2>Justification for Inclusion</h2>
+<p>I selected XPLR for the Software Design and Engineering category due to the backend API that consists of the main.py file, authenticator.py, and the accounts router. It represents software design problems that include configuring the application, user authentication, and handling requests. During my code review, I tested this code on a simple checklist regarding its readability, error handling, security, and structuring, and found some concrete problems that should be addressed.</p>
+<p>Firstly, the CORS setting in the main.py file checked the same environment variable with two fallbacks, so that when this environment variable is set in a real environment, both allowed-origin values will be the same, and the expected fallbacks won’t work. The configuration includes wildcard values for allowed methods and headers that is insecure in production. Secondly, the account-lookup functionality in the authenticator.py file does not have any input validation and error handling, and if there will be some error with the database, it will result in unhandled 500 error. Thirdly, the create_account endpoint of the accounts router handles only one exception (duplicated account). Also, the get_token endpoint of the same router implicitly returns None in one place, although it is defined as AccountToken in the response model.</p>
+<p>To solve these problems, I’ve done the following. In main.py, I’ve changed all places where environment variables are being read in order to parse CORS_HOST just once in a helper function, to be able to use a list of origins (comma separated) as well as local origins only if there’s no variable set. Also, I have replaced the wildcard method with an explicit list containing only what we need on the frontend side and the list of headers to an explicit list too. In authenticator.py, I’ve added input validation that checks for non-blank username before hitting the database and wrapped an account look-up in a try-except block where an error will be logged in detail and returned back as a generic one. Also, I’ve added a guard clause in get_hashed_password function in order not to fail with some obscure error in case of a malformed account object. In the accounts router, I’ve added explicit input validation on username and password while creating an account, as well as more extensive exceptions handling both for creating accounts and for automatic logging in after that and even for listing the accounts as well. Also, I have changed get_token endpoint in such a way that every path would return a clear value of type matching the response model, instead of implicitly returning None.</p>
+</section>
+<section class="prose">
+<h2>Course Outcomes</h2>
+<p>As mentioned in the previous module, my objective was to illustrate a security-oriented approach that anticipates the attacks and addresses the issues in the design and ensures protection of the data and resources. In my opinion, the improvements made in this milestone achieve these objectives. The restrictions applied to the CORS policy reduce the vulnerability of the application, since it restricts the allowed cross-origin requests according to the required methods and headers. The validation of the input at the authentication layer and at the stage of the account creation reduces the risks associated with the input of malicious data in the database. The implementation of the structured error handling and logging in the code of the authentication and accounts functionality ensures the fact that the errors would not leak the internal details to the users while providing sufficient data for the diagnosis of the problem. Correction of the type mismatch issue in the get_token method corrects the error-prone code, which was working unexpectedly. At the moment I have no updates on my outcome-coverage plan regarding this artifact.</p>
+</section>
+<section class="prose">
+<h2>Reflection</h2>
+<p>In this case, it was not changing any of the code itself that presented a challenge, but simply running the application again. XPLR had not been run since 2023 and before doing anything else, I needed to set up an .env file to reset some of the environment variables necessary for the application to run. This process took more time than anticipated. After getting the application running, looking at the old code was initially somewhat frustrating because I had to remind myself of why we chose certain coding practices three years ago. In the end, however, it turned out to be quite a rewarding process. Applying everything that I learned in Hack Reactor to the code that I wrote while being a relatively new developer gave me a very tangible understanding of how much my philosophy about error handling, security, and defensive programming matured. Moreover, it once again underlined the importance of conducting code reviews — applying a simple checklist to the code allowed me to identify flaws that I would not have found on my own.</p>
+</section>
+
+</main>
+<footer>
+  <div class="wrap wide"><p>&copy; Lyth Hammad &middot; CS 499: Computer Science Capstone</p></div>
+</footer>
+</body>
+</html>
