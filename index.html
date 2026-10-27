@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyth Hammad | Computer Science ePortfolio</title>
+<meta name="description" content="ePortfolio and professional self-assessment for Lyth Hammad, Computer Science capstone (CS 499).">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header>
+  <div class="wrap">
+    <p class="name">Lyth Hammad</p>
+    <p class="tagline">Computer Science ePortfolio &middot; CS 499 Capstone</p>
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="index.html" aria-current="page">Professional Self-Assessment</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap">
+<h1>Professional Self-Assessment</h1>
+<section>
+<h2>Introduction and Professional Goals</h2>
+<p>Completing the Computer Science program and building this ePortfolio showed me my strengths: problem solving, writing clean code, and writing secure code. I plan to enter the cybersecurity industry, with software engineering as a second path. I care about security and code quality, and I want my work to reflect both. The capstone made me look back at what I have built over the years, including what I could have done better. It showed me how far I have come in a few years and how much I could be doing now. That reflection prepared me for the field because I can now review my own work critically and improve it.</p>
+</section>
+<section>
+<h2>Collaborating in a Team Environment</h2>
+<p>Working on XPLR taught me how to collaborate in a team environment. Five developers, including me, built the app. We divided the back end and front end as evenly as we could, and we agreed on who took each part based on where each person had the least experience, so that everyone built up a weaker skill. On the back end and front end, I worked on the database and user parts. We worked together on the favorites database, and the rest was done individually or in teams of two or three. When someone needed help, they asked the teammate with the most skill in that area.</p>
+<p>I built another project at Hack Reactor, CarCar, a full-stack dealership web application, with one other developer. We were both full stack developers and split the back end and front end work evenly, 50/50. When we disagreed on something, we took it to an instructor to decide which option best fit the project. Across both projects, I learned to share ownership, ask for help early, and make sure my part worked with my teammates’ parts.</p>
+</section>
+<section>
+<h2>Communicating with Stakeholders</h2>
+<p>On both XPLR and CarCar, our instructors were the stakeholders. About 80% of our communication was through Zoom meetings, where we demonstrated our working code and talked through problems as they came up. The other 20% happened on Discord or Slack, which we used mainly to send each other small pieces of code or screenshots of features that were working. For the XPLR final presentation, each team member explained their portion of the project to an audience of about 50 classmates plus about 10 instructors and assistants: what it does and what they had to do to build it. Then we answered questions. I was asked a few questions about how I built the login UI, and the feedback on my work was mostly positive, especially on how it looked and how well it fit into the project. This taught me to explain my own work clearly and answer questions about it in front of a large audience.</p>
+</section>
+<section>
+<h2>Data Structures and Algorithms</h2>
+<p>Hack Reactor taught me the most about data structures and algorithms. It was hands-on and less theory-based, and that is where I learned Big O notation and a wide range of algorithms. I have worked with sorting, trees, and arrays. On XPLR, memory mattered, and the APIs we used returned a lot of data. We didn’t want the site to take a long time to load, so we used data structures and algorithms to sort the data we needed from those APIs. This made the website load faster and run more efficiently, and it taught me to choose an approach based on how it affects performance and memory use.</p>
+</section>
+<section>
+<h2>Software Engineering and Databases</h2>
+<p>My software engineering skills come equally from SNHU and Hack Reactor. SNHU was more theory-based and focused on code review, the software development life cycle, and design patterns. Hack Reactor was project-based and hands-on, where I applied those ideas to real applications. I have worked with PostgreSQL on XPLR, MongoDB on CarCar, and MongoDB on Travlr at SNHU. Working with both relational and document databases showed me that the database choice should fit the application. One decision stands out. When I hardened XPLR’s favorites feature, I enforced uniqueness with a database constraint instead of relying only on application code. A rule enforced by the database holds no matter what code calls it, and I now apply that principle in my designs.</p>
+</section>
+<section>
+<h2>Security</h2>
+<p>Most of my security knowledge comes from SNHU, with a smaller part from Hack Reactor. I have learned about secure coding, encryption, vulnerabilities, and network threats. In IT 340: Network and Telecommunication Management and CS 405: Secure Coding, I learned that older code is often unsafe and that code should be kept updated. CS 499 put that lesson into practice. I took an old project of mine, XPLR, reviewed its code, and updated it to current quality standards. In that review I restricted the wildcard CORS settings to the methods and headers the app needs and added input validation to the account code. I also added error handling that logs the details and returns only generic messages to users. This taught me to look at code the way an attacker would and to fix weaknesses before they cause harm.</p>
+</section>
+<section>
+<h2>My Artifacts</h2>
+<p>The artifacts in this ePortfolio are three enhancements to XPLR, a full-stack national parks explorer I built in 2023 at Hack Reactor with four other developers. Users browse parks across the Americas, see a map and the weather, create an account, save favorites, and leave reviews. I enhanced a different layer of the same codebase in each category, so the three pieces build on each other.</p>
+<ul>
+<li><strong>Software Design and Engineering:</strong> I reviewed the backend API (main.py, authenticator.py, and the accounts router) and fixed its CORS configuration, added input validation, added error handling and logging, and made the token endpoint return a consistent result.</li>
+<li><strong>Algorithms and Data Structures:</strong> I refactored the reviews query module to remove duplicated row-to-dictionary logic, added filtering by park and sorting by rating and date, and added an average rating calculation that runs in SQL.</li>
+<li><strong>Databases:</strong> I hardened the PostgreSQL layer with consistent error handling and logging, a unique constraint on favorites added through a migration, and pagination on the queries that returned entire tables.</li>
+</ul>
+<p>The error-handling approach from the first enhancement carried into the other two, and the data-processing mindset from the second carried into the third. Together they show how I take working code and make it more secure, efficient, and maintainable.</p>
+</section>
+</main>
+<footer>
+  <div class="wrap"><p>&copy; Lyth Hammad &middot; CS 499: Computer Science Capstone</p></div>
+</footer>
+</body>
+</html>
