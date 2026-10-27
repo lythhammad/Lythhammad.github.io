@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enhancement Two: Algorithms and Data Structures | Lyth Hammad</title>
+<meta name="description" content="ePortfolio for Lyth Hammad, Computer Science capstone (CS 499).">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header>
+  <div class="wrap wide">
+    <p class="name">Lyth Hammad</p>
+    <p class="tagline">Computer Science ePortfolio &middot; CS 499 Capstone</p>
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="index.html">Professional Self-Assessment</a></li>
+        <li><a href="enhancement1.html">Enhancement 1: Software Design and Engineering</a></li>
+        <li><a href="enhancement2.html" aria-current="page">Enhancement 2: Algorithms and Data Structures</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap wide">
+<h1>Enhancement Two: Algorithms and Data Structures</h1>
+<p class="sub">Artifact: XPLR reviews query module (Hack Reactor, 2023)</p>
+<section>
+<h2>Original and Enhanced Code</h2>
+<p>The file is shown before and after the enhancement. Download links open the plain files.</p>
+<h3>reviews.py</h3>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement2/original/reviews.py" download>download</a></p>
+<pre tabindex="0"><code>from models.reviews import ReviewIn
+from queries.pool import pool
+
+
+class ReviewsQueries():
+    def create_review(self, review: ReviewIn, user_id: int, username: str):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                params = [
+                    review.comment,
+                    user_id,
+                    review.park_code,
+                    username,
+                    review.rating
+                ]
+                cur.execute(
+                    """
+                    INSERT INTO reviews (
+                        comment, user_id, park_code, username, rating)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, comment, user_id, park_code, username, rating
+                    """,
+                    params,
+                )
+
+                record = None
+                row = cur.fetchone()
+                if row is not None:
+                    record = {}
+                    for i, col in enumerate(cur.description):
+                        record[col.name] = row[i]
+
+                return record
+
+    def get_user_reviews(self, user_id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, comment, user_id, park_code, rating
+                    FROM reviews
+                    WHERE user_id = %s
+                    """,
+                    [
+                        user_id
+                    ]
+                )
+                results = []
+                for row in cur.fetchall():
+                    review = {}
+                    for i, col in enumerate(cur.description):
+                        review[col.name] = row[i]
+                    results.append(review)
+                return results
+
+    def delete_review(self, user_id: int, id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM reviews
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    [
+                        id,
+                        user_id
+                    ]
+                )
+                if cur.rowcount &gt; 0:
+                    return "Deletion: Success"
+                else:
+                    return "Deletion: Failed"
+
+    def get_all_reviews(self):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, comment, user_id, park_code, username, rating
+                    FROM reviews
+                    """
+                )
+                results = []
+                for row in cur.fetchall():
+                    review = {}
+                    for i, col in enumerate(cur.description):
+                        review[col.name] = row[i]
+                    results.append(review)
+                return results</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement2/enhanced/reviews.py" download>download</a></p>
+<pre tabindex="0"><code>from models.reviews import ReviewIn
+from queries.pool import pool
+
+
+class ReviewsQueries:
+    @staticmethod
+    def _row_to_dict(cursor, row):
+        """
+        Convert a single database row into a dictionary keyed by
+        column name, using the cursor's description.
+
+        This replaces the same for-loop that was previously repeated
+        in every method that read rows from the reviews table.
+        """
+        return {col.name: value for col, value in zip(cursor.description, row)}
+
+    def create_review(self, review: ReviewIn, user_id: int, username: str):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                params = [
+                    review.comment,
+                    user_id,
+                    review.park_code,
+                    username,
+                    review.rating,
+                ]
+                cur.execute(
+                    """
+                    INSERT INTO reviews (
+                        comment, user_id, park_code, username, rating)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, comment, user_id, park_code, username, rating
+                    """,
+                    params,
+                )
+
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                return self._row_to_dict(cur, row)
+
+    def get_user_reviews(self, user_id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, comment, user_id, park_code, rating
+                    FROM reviews
+                    WHERE user_id = %s
+                    """,
+                    [user_id],
+                )
+                return [
+                    self._row_to_dict(cur, row) for row in cur.fetchall()
+                ]
+
+    def delete_review(self, user_id: int, id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM reviews
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    [id, user_id],
+                )
+                if cur.rowcount &gt; 0:
+                    return "Deletion: Success"
+                else:
+                    return "Deletion: Failed"
+
+    def get_all_reviews(self, park_code: str = None, sort_by: str = None):
+        """
+        Retrieve reviews, optionally filtered by park and sorted.
+
+        sort_by accepts:
+          - "rating": highest rating first
+          - "newest": most recently created first (uses id, since the
+            reviews table has no created_at timestamp column)
+          - None: raw database order (previous default behavior)
+        """
+        query = """
+            SELECT id, comment, user_id, park_code, username, rating
+            FROM reviews
+        """
+        params = []
+
+        if park_code is not None:
+            query += " WHERE park_code = %s"
+            params.append(park_code)
+
+        if sort_by == "rating":
+            query += " ORDER BY rating DESC"
+        elif sort_by == "newest":
+            query += " ORDER BY id DESC"
+
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                return [
+                    self._row_to_dict(cur, row) for row in cur.fetchall()
+                ]
+
+    def get_average_rating_by_park(self, park_code: str):
+        """
+        Compute the average review rating for a given park.
+
+        Returns a dict with park_code, average_rating (rounded to 2
+        decimal places, or None if the park has no reviews yet), and
+        review_count.
+        """
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        park_code,
+                        ROUND(AVG(rating)::numeric, 2) AS average_rating,
+                        COUNT(*) AS review_count
+                    FROM reviews
+                    WHERE park_code = %s
+                    GROUP BY park_code
+                    """,
+                    [park_code],
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return {
+                        "park_code": park_code,
+                        "average_rating": None,
+                        "review_count": 0,
+                    }
+                return self._row_to_dict(cur, row)</code></pre>
+</div>
+</div>
+</section>
+<section class="prose">
+<h2>Artifact Description</h2>
+<p>XPLR, which is the full-stack web application created in 2023 as the final project of Hack Reactor in collaboration with four other developers, has been chosen for this enhancement process. XPLR can be described as the national parks explorer website for people interested in discovering national parks around the Americas. In XPLR, the user is offered an option to get visualized information about the park, the map displaying the location of the park, the current weather on the territory of the park, and the ability to create an account, login, and form their own list of favorite parks. In this particular enhancement, we focused on another part of the same codebase – the park review module. The module allows the user to give rating and write their opinion about the park and get the reviews made either by that specific user or by all users. The review module is integrated into the reviews query and operates using a PostgreSQL database with the help of shared connection pool.</p>
+</section>
+<section class="prose">
+<h2>Justification for Inclusion</h2>
+<p>I chose to analyze the reviews query module of XPLR under the Algorithms and Data Structures category since at first glance, this component did nothing but store and fetch information about reviews without making any use of processing it. While doing a code review, I looked at this file in terms of a standard checklist and found three problems related to this category. First of all, there were four different methods, such as get_all_reviews and get_user_reviews, which used the same loop to iterate over the columns of cursor’s description and corresponding elements of the current row to build dictionaries – the same piece of logic repeated four times. Second, the get_all_reviews function did not have any options to filter or sort the results, so the reviews returned unfiltered in the order how they were stored in the database without the possibility to order them by rating or date. The third problem is probably the most serious one for the given category – there was no calculation done with the help of the data stored.</p>
+<p>To solve these problems, three improvements have been introduced. Firstly, the row to dictionary conversion logic has been refactored into a single static function _row_to_dict, which has been called from all of the methods working with the reviews table. This way, the redundancy is avoided and all of the logic is centralized for future changes. Secondly, the get_all_reviews method has been modified to take two additional parameters park_code and sort_by, which will allow filtering by a certain park and sorting of reviews by their rating and date of entry (by rating descending and by newest review first). Lastly, a new function get_average_rating_by_park has been added. The function uses SQL aggregate functions AVG and COUNT to calculate the park’s average rating and the number of reviews in the database, thus avoiding the need to download all of the reviews and doing the calculation manually. Using the aggregate function directly in the database is a more efficient approach, since it allows to avoid downloading all of the rows and iterating over them just to calculate a single number.</p>
+<p>In combination, these changes turn the reviews component from just another storage container for data to a feature that creates valuable derived information, all while increasing maintainability of the code by removing redundant logic.</p>
+</section>
+<section class="prose">
+<h2>Course Outcomes</h2>
+<p>The design of this enhancement was aimed at exhibiting the outcome of this course concerning designing and evaluating computing solutions using algorithms and computer science methodologies by carefully considering the inherent trade-offs associated with design decisions. I confirm that the changes made to this enhancement meet the specified outcome. The process of aggregation of average ratings and sorting capabilities extends the scope of the module from just storing and retrieving the information to manipulating the data. Using the on-the-fly computation of average in place of caching the value is based on a trade-off decision regarding the use of the former in view of the current data volume. There are no updates to my plan for outcome coverage of this artifact. Although the idea of adding the new query methods as endpoints to the reviews router came to mind, it is evident that doing this would be out of the scope of the enhancement as described in the original code review.</p>
+</section>
+<section class="prose">
+<h2>Reflection</h2>
+<p>This update had a narrower focus compared to the previous one, concentrating solely on the development of a single self-sufficient query module as opposed to several interrelated files. The biggest lesson learned from this stage was recognizing the duplication of row-to-dictionary conversion. This type of duplication tends to be difficult to notice when individual methods are being developed, since each one seems logical and becomes problematic only in comparison. Condensing the duplication into a single helper function shortened the code significantly. The development of average rating aggregation revealed that some computations should be made using SQL language instead of Python: entrusting calculations of average rating and count of records to PostgreSQL as opposed to fetching all the rows and calculating manually produced a simpler and more efficient solution. To conclude, this milestone proved how simple refactoring along with effective utilization of database capabilities could improve a seemingly functional module that was doing half the job.</p>
+</section>
+
+</main>
+<footer>
+  <div class="wrap wide"><p>&copy; Lyth Hammad &middot; CS 499: Computer Science Capstone</p></div>
+</footer>
+</body>
+</html>
