@@ -14,9 +14,11 @@ This repository hosts my capstone ePortfolio. The site opens with my professiona
 | [Enhancement 1](https://lythhammad.github.io/enhancement1.html) | Software Design and Engineering | Backend API: CORS configuration, input validation, error handling, consistent responses |
 | [Enhancement 2](https://lythhammad.github.io/enhancement2.html) | Algorithms and Data Structures | Reviews module: shared helper, filtering and sorting, SQL aggregate for average rating |
 | [Enhancement 3](https://lythhammad.github.io/enhancement3.html) | Databases | PostgreSQL layer: error handling, unique constraint migration, pagination |
+| [Documents](https://lythhammad.github.io/documents.html) | Word documents | Self-assessment and the three enhancement narratives as Word files |
 
 ## Repository structure
 
-- `index.html`, `enhancement1.html`, `enhancement2.html`, `enhancement3.html`: site pages
+- `index.html`, `enhancement1.html`, `enhancement2.html`, `enhancement3.html`, `documents.html`: site pages
 - `style.css`: site styles
 - `artifacts/`: original and enhanced code files for each enhancement
+- `documents/`: Word versions of the self-assessment and narratives
