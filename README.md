@@ -1,23 +1,22 @@
-# Lythhammad.github.io
+# Lyth Hammad | Computer Science ePortfolio
 
-FUNCTION handle_login_request(username, password): 
+CS 499: Computer Science Capstone, Southern New Hampshire University
 
-    input_sanitized = SANITIZE(username, password) 
-    user = DATABASE.find_user(input_sanitized.username) 
-    
-    IF user AND VERIFY_PASSWORD(input_sanitized.password, user.password_hash): 
-        session_token = GENERATE_SECURE_TOKEN() 
-        SET_SECURE_HTTP_ONLY_COOKIE(session_token) 
-        RETURN HTTP_200_OK(dashboard_data) 
+**Live site:** https://lythhammad.github.io/
 
-    ELSE: 
-        LOG_FAILED_ATTEMPT(input_sanitized.username) 
-        RETURN HTTP_401_UNAUTHORIZED("Invalid credentials")   
+This repository hosts my capstone ePortfolio. The site opens with my professional self-assessment and then presents three enhancements to XPLR, a full-stack national parks explorer I built in 2023 at Hack Reactor. Each enhancement page shows the original code, the enhanced code, and a narrative about what I changed and what I learned.
 
-FUNCTION fetch_portfolio_data(): 
+## Contents
 
-    languages = DATABASE.get_learned_languages() 
-    projects = DATABASE.get_projects() 
-    RETURN JSON({ "languages": languages, "projects": projects }) 
+| Page | Category | What it shows |
+| --- | --- | --- |
+| [Professional Self-Assessment](https://lythhammad.github.io/) | Introduction | My strengths, goals, and experience in teamwork, communication, algorithms, software engineering, databases, and security |
+| [Enhancement 1](https://lythhammad.github.io/enhancement1.html) | Software Design and Engineering | Backend API: CORS configuration, input validation, error handling, consistent responses |
+| [Enhancement 2](https://lythhammad.github.io/enhancement2.html) | Algorithms and Data Structures | Reviews module: shared helper, filtering and sorting, SQL aggregate for average rating |
+| [Enhancement 3](https://lythhammad.github.io/enhancement3.html) | Databases | PostgreSQL layer: error handling, unique constraint migration, pagination |
 
- 
+## Repository structure
+
+- `index.html`, `enhancement1.html`, `enhancement2.html`, `enhancement3.html`: site pages
+- `style.css`: site styles
+- `artifacts/`: original and enhanced code files for each enhancement
