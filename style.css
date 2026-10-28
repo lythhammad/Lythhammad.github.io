@@ -34,3 +34,5 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .prose{max-width:46rem}
 @media (max-width:60rem){.compare{grid-template-columns:1fr}}
 .note{color:var(--muted);margin:0 0 .5rem;font-size:.9rem}
+.docs{list-style:none;padding:0}
+.docs li{padding:.8rem 0;border-bottom:1px solid var(--line)}
