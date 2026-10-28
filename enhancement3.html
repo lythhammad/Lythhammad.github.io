@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enhancement Three: Databases | Lyth Hammad</title>
+<meta name="description" content="ePortfolio for Lyth Hammad, Computer Science capstone (CS 499).">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header>
+  <div class="wrap wide">
+    <p class="name">Lyth Hammad</p>
+    <p class="tagline">Computer Science ePortfolio &middot; CS 499 Capstone</p>
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="index.html">Professional Self-Assessment</a></li>
+        <li><a href="enhancement1.html">Enhancement 1: Software Design and Engineering</a></li>
+        <li><a href="enhancement2.html">Enhancement 2: Algorithms and Data Structures</a></li>
+        <li><a href="enhancement3.html" aria-current="page">Enhancement 3: Databases</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap wide">
+<h1>Enhancement Three: Databases</h1>
+<p class="sub">Artifact: XPLR database layer, PostgreSQL (Hack Reactor, 2023)</p>
+<section>
+<h2>Original and Enhanced Code</h2>
+<p>Each file is shown before and after the enhancement. Download links open the plain files.</p>
+<h3>pool.py</h3>
+<p class="note">Original and enhanced.</p>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement3/original/pool.py" download>download</a></p>
+<pre tabindex="0"><code>import os
+from psycopg_pool import ConnectionPool
+
+
+pool = ConnectionPool(conninfo=os.environ["DATABASE_URL"])</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement3/enhanced/pool.py" download>download</a></p>
+<pre tabindex="0"><code>import logging
+import os
+
+from psycopg_pool import ConnectionPool, PoolTimeout
+
+logger = logging.getLogger(__name__)
+
+
+def _build_pool() -&gt; ConnectionPool:
+    """
+    Build the connection pool, failing loudly and with a clear log
+    message if DATABASE_URL is missing or the pool cannot be created,
+    instead of crashing later with an unrelated-looking error.
+    """
+    try:
+        database_url = os.environ["DATABASE_URL"]
+    except KeyError:
+        logger.critical("DATABASE_URL environment variable is not set.")
+        raise
+
+    try:
+        return ConnectionPool(conninfo=database_url)
+    except Exception:
+        logger.critical("Failed to create the database connection pool.")
+        raise
+
+
+pool = _build_pool()
+
+
+def get_connection():
+    """
+    Acquire a connection from the pool, with a clear, logged error if
+    the pool is exhausted or unavailable, rather than letting a raw
+    psycopg_pool exception surface to the caller.
+
+    Use this via `with get_connection() as conn:` anywhere a query
+    module needs a connection; it wraps the same pool.connection()
+    context manager with error handling.
+    """
+    try:
+        return pool.connection()
+    except PoolTimeout:
+        logger.exception("Timed out waiting for a database connection.")
+        raise
+    except Exception:
+        logger.exception("Unexpected error acquiring a database connection.")
+        raise</code></pre>
+</div>
+</div>
+<h3>favorites.py</h3>
+<p class="note">Original and enhanced.</p>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement3/original/favorites.py" download>download</a></p>
+<pre tabindex="0"><code>from models.favorites import FavoriteIn, FavoriteOut, Favorites
+from queries.pool import pool
+
+
+class FavoritesQueries():
+
+    def create_favorite(
+            self, favorites: FavoriteIn, user_id: int) -&gt; Favorites:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO favorites
+                        (user_id, park_code)
+                    VALUES
+                    (%s,%s)
+                    RETURNING id;
+                    """,
+                    [
+                        user_id,
+                        favorites.park_code,
+                    ]
+                )
+                id = cur.fetchone()[0]
+                data = favorites.dict()
+                return FavoriteOut(id=id, user_id=user_id, **data)
+
+    def get_user_favorites(self, user_id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, user_id, park_code
+                    FROM favorites
+                    WHERE user_id = %s
+                    """,
+                    [
+                        user_id
+                    ]
+                )
+                rows = cur.fetchall()
+                favorites = []
+                for row in rows:
+                    id, user_id, park_code = row
+                    favorite = FavoriteOut(
+                        id=id, user_id=user_id, park_code=park_code)
+                    favorites.append(favorite)
+                return favorites
+
+    def delete_favorite(self, user_id: int, id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM favorites
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    [
+                        id,
+                        user_id
+                    ]
+                )
+                if cur.rowcount &gt; 0:
+                    return "Deletion: Success"
+                else:
+                    return "Deletion: Failed"
+
+    def get_all_favorites(self):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, user_id, park_code
+                    FROM favorites
+                    """
+                )
+                results = []
+                for row in cur.fetchall():
+                    favorite = {}
+                    for i, col in enumerate(cur.description):
+                        favorite[col.name] = row[i]
+                    results.append(favorite)
+                return results</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement3/enhanced/favorites.py" download>download</a></p>
+<pre tabindex="0"><code>import logging
+
+from psycopg.errors import UniqueViolation
+
+from models.favorites import FavoriteIn, FavoriteOut, Favorites
+from queries.pool import pool
+
+logger = logging.getLogger(__name__)
+
+
+class DuplicateFavoriteError(Exception):
+    """Raised when a user tries to favorite a park they've already favorited."""
+    pass
+
+
+class FavoritesQueries:
+
+    def create_favorite(
+        self, favorites: FavoriteIn, user_id: int
+    ) -&gt; Favorites:
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO favorites
+                            (user_id, park_code)
+                        VALUES
+                        (%s, %s)
+                        RETURNING id;
+                        """,
+                        [
+                            user_id,
+                            favorites.park_code,
+                        ],
+                    )
+                    id = cur.fetchone()[0]
+        except UniqueViolation:
+            # Relies on the unique_user_park_favorite constraint added
+            # in migration 003.
+            logger.info(
+                "Duplicate favorite attempt: user_id=%s park_code=%s",
+                user_id,
+                favorites.park_code,
+            )
+            raise DuplicateFavoriteError(
+                "This park is already in your favorites."
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error creating favorite for user_id=%s", user_id
+            )
+            raise
+
+        data = favorites.dict()
+        return FavoriteOut(id=id, user_id=user_id, **data)
+
+    def get_user_favorites(self, user_id: int):
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, user_id, park_code
+                        FROM favorites
+                        WHERE user_id = %s
+                        """,
+                        [user_id],
+                    )
+                    rows = cur.fetchall()
+        except Exception:
+            logger.exception(
+                "Unexpected error retrieving favorites for user_id=%s",
+                user_id,
+            )
+            raise
+
+        favorites = []
+        for row in rows:
+            id, user_id, park_code = row
+            favorite = FavoriteOut(id=id, user_id=user_id, park_code=park_code)
+            favorites.append(favorite)
+        return favorites
+
+    def delete_favorite(self, user_id: int, id: int):
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM favorites
+                        WHERE id = %s AND user_id = %s
+                        """,
+                        [id, user_id],
+                    )
+                    deleted = cur.rowcount &gt; 0
+        except Exception:
+            logger.exception(
+                "Unexpected error deleting favorite id=%s for user_id=%s",
+                id,
+                user_id,
+            )
+            raise
+
+        return "Deletion: Success" if deleted else "Deletion: Failed"
+
+    def get_all_favorites(self, limit: int = 50, offset: int = 0):
+        """
+        Retrieve favorites with pagination.
+
+        limit caps how many rows come back at once (default 50, so a
+        growing table doesn't pull every row into memory), and offset
+        skips that many rows, so callers can page through results.
+        """
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, user_id, park_code
+                        FROM favorites
+                        ORDER BY id
+                        LIMIT %s OFFSET %s
+                        """,
+                        [limit, offset],
+                    )
+                    rows = cur.fetchall()
+                    results = []
+                    for row in rows:
+                        favorite = {}
+                        for i, col in enumerate(cur.description):
+                            favorite[col.name] = row[i]
+                        results.append(favorite)
+                    return results
+        except Exception:
+            logger.exception("Unexpected error retrieving all favorites.")
+            raise</code></pre>
+</div>
+</div>
+<h3>reviews.py</h3>
+<p class="note">The “original” here is the version after Enhancement Two, which is the starting point for this enhancement.</p>
+<div class="compare">
+<div>
+<p class="label">Original &middot; <a href="artifacts/enhancement3/original/reviews.py" download>download</a></p>
+<pre tabindex="0"><code>from models.reviews import ReviewIn
+from queries.pool import pool
+
+
+class ReviewsQueries:
+    @staticmethod
+    def _row_to_dict(cursor, row):
+        """
+        Convert a single database row into a dictionary keyed by
+        column name, using the cursor's description.
+
+        This replaces the same for-loop that was previously repeated
+        in every method that read rows from the reviews table.
+        """
+        return {col.name: value for col, value in zip(cursor.description, row)}
+
+    def create_review(self, review: ReviewIn, user_id: int, username: str):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                params = [
+                    review.comment,
+                    user_id,
+                    review.park_code,
+                    username,
+                    review.rating,
+                ]
+                cur.execute(
+                    """
+                    INSERT INTO reviews (
+                        comment, user_id, park_code, username, rating)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, comment, user_id, park_code, username, rating
+                    """,
+                    params,
+                )
+
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                return self._row_to_dict(cur, row)
+
+    def get_user_reviews(self, user_id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, comment, user_id, park_code, rating
+                    FROM reviews
+                    WHERE user_id = %s
+                    """,
+                    [user_id],
+                )
+                return [
+                    self._row_to_dict(cur, row) for row in cur.fetchall()
+                ]
+
+    def delete_review(self, user_id: int, id: int):
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM reviews
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    [id, user_id],
+                )
+                if cur.rowcount &gt; 0:
+                    return "Deletion: Success"
+                else:
+                    return "Deletion: Failed"
+
+    def get_all_reviews(self, park_code: str = None, sort_by: str = None):
+        """
+        Retrieve reviews, optionally filtered by park and sorted.
+
+        sort_by accepts:
+          - "rating": highest rating first
+          - "newest": most recently created first (requires a
+            created_at column; falls back to id if not present)
+          - None: raw database order (previous default behavior)
+        """
+        query = """
+            SELECT id, comment, user_id, park_code, username, rating
+            FROM reviews
+        """
+        params = []
+
+        if park_code is not None:
+            query += " WHERE park_code = %s"
+            params.append(park_code)
+
+        if sort_by == "rating":
+            query += " ORDER BY rating DESC"
+        elif sort_by == "newest":
+            query += " ORDER BY id DESC"
+
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                return [
+                    self._row_to_dict(cur, row) for row in cur.fetchall()
+                ]
+
+    def get_average_rating_by_park(self, park_code: str):
+        """
+        Compute the average review rating for a given park.
+
+        Returns a dict with park_code, average_rating (rounded to 2
+        decimal places, or None if the park has no reviews yet), and
+        review_count.
+        """
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        park_code,
+                        ROUND(AVG(rating)::numeric, 2) AS average_rating,
+                        COUNT(*) AS review_count
+                    FROM reviews
+                    WHERE park_code = %s
+                    GROUP BY park_code
+                    """,
+                    [park_code],
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return {
+                        "park_code": park_code,
+                        "average_rating": None,
+                        "review_count": 0,
+                    }
+                return self._row_to_dict(cur, row)</code></pre>
+</div>
+<div>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement3/enhanced/reviews.py" download>download</a></p>
+<pre tabindex="0"><code>import logging
+
+from models.reviews import ReviewIn
+from queries.pool import pool
+
+logger = logging.getLogger(__name__)
+
+
+class ReviewsQueries:
+    @staticmethod
+    def _row_to_dict(cursor, row):
+        """
+        Convert a single database row into a dictionary keyed by
+        column name, using the cursor's description.
+
+        This replaces the same for-loop that was previously repeated
+        in every method that read rows from the reviews table.
+        """
+        return {col.name: value for col, value in zip(cursor.description, row)}
+
+    def create_review(self, review: ReviewIn, user_id: int, username: str):
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    params = [
+                        review.comment,
+                        user_id,
+                        review.park_code,
+                        username,
+                        review.rating,
+                    ]
+                    cur.execute(
+                        """
+                        INSERT INTO reviews (
+                            comment, user_id, park_code, username, rating)
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id, comment, user_id, park_code, username, rating
+                        """,
+                        params,
+                    )
+
+                    row = cur.fetchone()
+                    if row is None:
+                        return None
+                    return self._row_to_dict(cur, row)
+        except Exception:
+            logger.exception(
+                "Unexpected error creating review for user_id=%s park_code=%s",
+                user_id,
+                review.park_code,
+            )
+            raise
+
+    def get_user_reviews(self, user_id: int):
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, comment, user_id, park_code, rating
+                        FROM reviews
+                        WHERE user_id = %s
+                        """,
+                        [user_id],
+                    )
+                    return [
+                        self._row_to_dict(cur, row) for row in cur.fetchall()
+                    ]
+        except Exception:
+            logger.exception(
+                "Unexpected error retrieving reviews for user_id=%s", user_id
+            )
+            raise
+
+    def delete_review(self, user_id: int, id: int):
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM reviews
+                        WHERE id = %s AND user_id = %s
+                        """,
+                        [id, user_id],
+                    )
+                    deleted = cur.rowcount &gt; 0
+        except Exception:
+            logger.exception(
+                "Unexpected error deleting review id=%s for user_id=%s",
+                id,
+                user_id,
+            )
+            raise
+
+        return "Deletion: Success" if deleted else "Deletion: Failed"
+
+    def get_all_reviews(
+        self,
+        park_code: str = None,
+        sort_by: str = None,
+        limit: int = 50,
+        offset: int = 0,
+    ):
+        """
+        Retrieve reviews, optionally filtered by park, sorted, and
+        paginated.
+
+        sort_by accepts:
+          - "rating": highest rating first
+          - "newest": most recently created first (uses id, since the
+            reviews table has no created_at timestamp column)
+          - None: raw database order (previous default behavior)
+
+        limit caps how many rows come back at once (default 50), and
+        offset skips that many rows, so callers can page through
+        results instead of pulling the entire table into memory.
+        """
+        query = """
+            SELECT id, comment, user_id, park_code, username, rating
+            FROM reviews
+        """
+        params = []
+
+        if park_code is not None:
+            query += " WHERE park_code = %s"
+            params.append(park_code)
+
+        if sort_by == "rating":
+            query += " ORDER BY rating DESC"
+        elif sort_by == "newest":
+            query += " ORDER BY id DESC"
+        else:
+            query += " ORDER BY id"
+
+        query += " LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    return [
+                        self._row_to_dict(cur, row) for row in cur.fetchall()
+                    ]
+        except Exception:
+            logger.exception("Unexpected error retrieving all reviews.")
+            raise
+
+    def get_average_rating_by_park(self, park_code: str):
+        """
+        Compute the average review rating for a given park.
+
+        Returns a dict with park_code, average_rating (rounded to 2
+        decimal places, or None if the park has no reviews yet), and
+        review_count.
+        """
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            park_code,
+                            ROUND(AVG(rating)::numeric, 2) AS average_rating,
+                            COUNT(*) AS review_count
+                        FROM reviews
+                        WHERE park_code = %s
+                        GROUP BY park_code
+                        """,
+                        [park_code],
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        return {
+                            "park_code": park_code,
+                            "average_rating": None,
+                            "review_count": 0,
+                        }
+                    return self._row_to_dict(cur, row)
+        except Exception:
+            logger.exception(
+                "Unexpected error computing average rating for park_code=%s",
+                park_code,
+            )
+            raise</code></pre>
+</div>
+</div>
+<h3>migrations/003_favorites_unique_constraint.py</h3>
+<p class="note">New file added in this enhancement (no original version).</p>
+<p class="label">Enhanced &middot; <a href="artifacts/enhancement3/enhanced/migrations/003_favorites_unique_constraint.py" download>download</a></p>
+<pre tabindex="0"><code>steps = [
+    [
+        # "Up" SQL statement
+        """
+        ALTER TABLE favorites
+        ADD CONSTRAINT unique_user_park_favorite
+        UNIQUE (user_id, park_code);
+        """,
+        # "Down" SQL statement
+        """
+        ALTER TABLE favorites
+        DROP CONSTRAINT unique_user_park_favorite;
+        """
+    ],
+]</code></pre>
+</section>
+<section class="prose">
+<h2>Artifact Description</h2>
+<p>The artifact I selected for this enhancement is once more XPLR, the full-stack national parks web application I built in 2023 as my final project at Hack Reactor, alongside four other developers. XPLR lets users browse national parks across the Americas, view a park’s location on an embedded map and its current weather, create an account, and save parks to a private favorites list, in addition to leaving ratings and feedback on individual parks. For this enhancement, I focused on the database layer of the application: the shared PostgreSQL connection pool, and the favorites and reviews query modules that use it to save and retrieve user data.</p>
+</section>
+<section class="prose">
+<h2>Justification for Inclusion</h2>
+<p>I chose the database layer of XPLR for the Databases category because, in its original form, it had a solid foundation but several real gaps in reliability and data integrity. During my code review, I evaluated pool.py, favorites.py, and reviews.py against a standard checklist and found three main problems. First, none of the database methods in either query module had error handling; a failed query, a dropped connection, or an exhausted connection pool would surface as a raw, unhandled exception instead of a clean, logged failure. Second, the favorites table had no constraint preventing a user from favoriting the same park more than once; nothing in the schema enforced that rule, so duplicate favorites were prevented, if at all, only by the application code calling it. Third, both get_all_favorites and get_all_reviews pulled every row from their tables without a limit, which would not scale as either table grew.</p>
+<p>To address these problems, I made the following improvements. In pool.py, I wrapped pool creation in error handling that logs a clear, specific message if the DATABASE_URL environment variable is missing or the pool cannot be built, and added a get_connection helper that logs connection failures, including pool timeouts, with full context. In favorites.py and reviews.py, I wrapped every database call in try/except blocks that log the full exception before re-raising it, so failures are diagnosable and still handled cleanly by the calling code, consistent with the error-handling approach I used in the two previous milestones. To address the missing data integrity constraint, I wrote a new migration that adds a unique constraint on the combination of user_id and park_code in the favorites table, and updated create_favorite in favorites.py to catch the resulting UniqueViolation and raise a clear DuplicateFavoriteError instead of letting a raw database error propagate. Finally, I added limit and offset parameters to both get_all_favorites and get_all_reviews, with a default limit of fifty rows, so the application can page through results instead of loading an entire table into memory at once.</p>
+<p>Together, these changes harden the data layer against both technical failures, through consistent error handling and logging, and data integrity issues, through the new database constraint, while also making the application more scalable through pagination.</p>
+</section>
+<section class="prose">
+<h2>Course Outcomes</h2>
+<p>In Module One, I planned for this enhancement to demonstrate the course outcomes of developing a security mindset that anticipates and mitigates design flaws, and using well-founded techniques in computing practices. I believe the changes made in this milestone meet both outcomes. The consistent error handling and logging across pool.py, favorites.py, and reviews.py directly addresses the security-mindset outcome by ensuring the application fails safely and traceably instead of exposing raw, unhandled exceptions. Adding a database-level unique constraint, rather than relying solely on application logic, reflects a well-founded, industry-standard approach to enforcing data integrity, and the pagination added to both get_all methods applies a proven technique for keeping the application performant as data grows. I do not have any updates to my outcome-coverage plan for this artifact.</p>
+</section>
+<section class="prose">
+<h2>Reflection</h2>
+<p>Working through the database layer reinforced how much good database design happens outside the application code itself. Adding the unique constraint on favorites was a useful reminder that some problems are better solved at the schema level than in Python: a constraint enforced by the database is guaranteed to hold no matter what code calls it, while an application-level check can always be bypassed by a new code path someone adds later. Applying the same error-handling pattern consistently across pool.py, favorites.py, and reviews.py also confirmed the value of having a repeatable approach instead of solving the same problem differently in every file; once the pattern was established in one file, extending it to the others was straightforward. The main challenge was writing the migration itself, since it meant thinking carefully about how an ALTER TABLE statement would interact with any existing data, and making sure the down migration correctly reversed the change. Overall, this milestone tied together lessons from the previous two: the error-handling habits from the Software Design enhancement and the data-processing mindset from the Algorithms and Data Structures enhancement both carried directly into how I approached hardening this database layer.</p>
+</section>
+
+</main>
+<footer>
+  <div class="wrap wide"><p>&copy; Lyth Hammad &middot; CS 499: Computer Science Capstone</p></div>
+</footer>
+</body>
+</html>

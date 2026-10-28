@@ -33,3 +33,4 @@ pre{margin:0;padding:.9rem;background:var(--band);border:1px solid var(--line);b
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .prose{max-width:46rem}
 @media (max-width:60rem){.compare{grid-template-columns:1fr}}
+.note{color:var(--muted);margin:0 0 .5rem;font-size:.9rem}
