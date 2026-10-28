@@ -23,7 +23,7 @@ a{color:var(--accent)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 footer{border-top:1px solid var(--line);padding:1.25rem 0;color:var(--muted);font-size:.9rem}
 .wrap.wide{max-width:72rem}
-main.wrap:not(.wide){max-width:46rem}
+main.narrow>*{max-width:46rem}
 .sub{color:var(--muted);margin-top:-1rem}
 h3{font-size:1.1rem;margin:1.75rem 0 .5rem}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
