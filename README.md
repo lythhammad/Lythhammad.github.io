@@ -11,6 +11,7 @@ This repository hosts my capstone ePortfolio. The site opens with my professiona
 | Page | Category | What it shows |
 | --- | --- | --- |
 | [Professional Self-Assessment](https://lythhammad.github.io/) | Introduction | My strengths, goals, and experience in teamwork, communication, algorithms, software engineering, databases, and security |
+| [Code Review](https://lythhammad.github.io/codereview.html) | Written code review | Review of XPLR in all three categories, submitted in place of a video with instructor approval |
 | [Enhancement 1](https://lythhammad.github.io/enhancement1.html) | Software Design and Engineering | Backend API: CORS configuration, input validation, error handling, consistent responses |
 | [Enhancement 2](https://lythhammad.github.io/enhancement2.html) | Algorithms and Data Structures | Reviews module: shared helper, filtering and sorting, SQL aggregate for average rating |
 | [Enhancement 3](https://lythhammad.github.io/enhancement3.html) | Databases | PostgreSQL layer: error handling, unique constraint migration, pagination |
@@ -18,7 +19,7 @@ This repository hosts my capstone ePortfolio. The site opens with my professiona
 
 ## Repository structure
 
-- `index.html`, `enhancement1.html`, `enhancement2.html`, `enhancement3.html`, `documents.html`: site pages
+- `index.html`, `enhancement1.html`, `enhancement2.html`, `enhancement3.html`, `codereview.html`, `documents.html`: site pages
 - `style.css`: site styles
 - `artifacts/`: original and enhanced code files for each enhancement
 - `documents/`: Word versions of the self-assessment and narratives
