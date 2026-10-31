@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Written Code Review | Lyth Hammad</title>
+<meta name="description" content="ePortfolio for Lyth Hammad, Computer Science capstone (CS 499).">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header>
+  <div class="wrap">
+    <p class="name">Lyth Hammad</p>
+    <p class="tagline">Computer Science ePortfolio &middot; CS 499 Capstone</p>
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="index.html">Professional Self-Assessment</a></li>
+        <li><a href="codereview.html" aria-current="page">Code Review</a></li>
+        <li><a href="enhancement1.html">Enhancement 1: Software Design and Engineering</a></li>
+        <li><a href="enhancement2.html">Enhancement 2: Algorithms and Data Structures</a></li>
+        <li><a href="enhancement3.html">Enhancement 3: Databases</a></li>
+        <li><a href="documents.html">Documents</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap">
+<h1>CS 499 Milestone One: Written Code Review</h1>
+<section>
+<h2>Introduction</h2>
+<p>This written code review is submitted in place of a narrated video, as approved by my instructor. It covers the same elements: the existing functionality of each artifact, the areas I identified for improvement, and the enhancements I made in each of the three categories.</p>
+<p>The artifact for all three categories is XPLR, a full-stack national parks explorer I built in 2023 at Hack Reactor with four other developers. It uses a FastAPI backend and a PostgreSQL database, and it integrates external APIs for national park information. I reviewed each part against a checklist covering readability, structure, error handling, and security.</p>
+</section>
+<section>
+<h2>Category One: Software Design and Engineering</h2>
+<h3>Existing functionality</h3>
+<p>I reviewed the backend API: main.py, authenticator.py, and the accounts router. main.py is the entry point. It creates the FastAPI app, sets up CORS middleware, and registers the auth, accounts, favorites, parks, and reviews routers as separate modules, so each feature lives in its own file instead of one large file.</p>
+<p>authenticator.py wraps the third-party jwtdown_fastapi library and defines how the app fetches account data, retrieves the hashed password, and builds the cookie payload. Password hashing is handled by the library, so I am not writing my own cryptography, which is good practice. In the accounts router, the create_account endpoint hashes the password, creates the account, and returns a 400 response when a DuplicateAccountError is raised.</p>
+<h3>Areas identified for improvement</h3>
+<p>In main.py, both allow_origins entries read the same CORS_HOST environment variable with two different fallback values, so when the variable is set, both entries are identical and the fallbacks do not work as intended. The allowed methods and headers are wildcards, which is a security concern for a production app.</p>
+<p>In authenticator.py, there is no input validation and no error handling around the account lookup, so a database error would surface as an unhandled 500 error with no logging. In the accounts router, create_account handles only one exception, DuplicateAccountError, so any other failure reaches the user as a generic server error. The get_token endpoint also implicitly returns None on one path even though its response model is AccountToken, which is not intentional.</p>
+<h3>Enhancements implemented</h3>
+<p>In main.py, I parse CORS_HOST once in a helper function, support a comma-separated list of origins, use local origins only when the variable is not set, and replaced the wildcards with explicit lists of the methods and headers the frontend needs. In authenticator.py, I added a check for a non-blank username before the database is queried, wrapped the account lookup in a try/except block that logs the error in detail and returns a generic one, and added a guard clause in get_hashed_password for malformed account objects.</p>
+<p>In the accounts router, I added explicit validation of the username and password when creating an account, broader exception handling for account creation, the automatic login that follows it, and account listing, and I changed get_token so every path returns a value that matches the response model.</p>
+</section>
+<section>
+<h2>Category Two: Algorithms and Data Structures</h2>
+<h3>Existing functionality</h3>
+<p>I reviewed the reviews query module. It creates, retrieves, and deletes park reviews in the PostgreSQL database through the shared connection pool. get_user_reviews and get_all_reviews fetch raw rows, then loop over each row and build a dictionary by pairing the column names in cur.description with the row values.</p>
+<h3>Areas identified for improvement</h3>
+<p>The same row-to-dictionary loop is repeated in three methods in this file (create_review, get_user_reviews, and get_all_reviews), which is duplicated logic that belongs in one helper. get_all_reviews has no way to filter or sort, so reviews come back in whatever order the database stores them. Most importantly for this category, the module only stores and retrieves data. It does no processing, such as calculating a park’s average rating, even though the data is already being pulled from the database.</p>
+<h3>Enhancements implemented</h3>
+<p>I refactored the repeated conversion into a single static function, _row_to_dict, called from every method that works with the reviews table. I added park_code and sort_by parameters to get_all_reviews so reviews can be filtered by park and sorted by rating (highest first) or by newest first. I also added get_average_rating_by_park, which uses the SQL aggregate functions AVG and COUNT so the database returns one result instead of the application downloading every review and calculating the average itself. I chose to compute the average on demand instead of caching it, a trade-off that fits the current data volume.</p>
+</section>
+<section>
+<h2>Category Three: Databases</h2>
+<h3>Existing functionality</h3>
+<p>I reviewed pool.py and the favorites and reviews query modules. pool.py creates a single ConnectionPool with psycopg_pool, using the connection string from the DATABASE_URL environment variable. The query modules use the pool as a context manager to open a connection and cursor, so connections are reused and returned to the pool even if something fails partway through. The queries I reviewed use parameterized %s placeholders instead of string formatting, which protects against SQL injection.</p>
+<h3>Areas identified for improvement</h3>
+<p>None of the database methods had error handling, so a failed query, a dropped connection, or an exhausted pool would surface as a raw, unhandled exception. Nothing in the favorites table prevented the same user from favoriting the same park more than once. And get_all_favorites and get_all_reviews pulled every row from their tables with no limit, which does not scale as the tables grow.</p>
+<h3>Enhancements implemented</h3>
+<p>In pool.py, I added error handling that logs a clear message if DATABASE_URL is missing or the pool cannot be built, and a get_connection helper that logs connection failures, including pool timeouts. In favorites.py and reviews.py, I wrapped every database call in try/except blocks that log the full exception before re-raising it. I wrote a migration that adds a unique constraint on user_id and park_code in the favorites table, and create_favorite now catches the resulting UniqueViolation and raises a clear DuplicateFavoriteError. I also added limit and offset parameters, with a default limit of fifty rows, to get_all_favorites and get_all_reviews.</p>
+</section>
+<section>
+<h2>Alignment with the Course Outcomes</h2>
+<h3>Collaborative environments</h3>
+<p>I have experienced code reviews at SNHU, Study.com, and Hack Reactor. This review follows the same checklist approach a team would use and is organized so that a peer or manager can see what the code does, what is weak, and what changed. XPLR itself was built by a team of five.</p>
+<h3>Professional communication</h3>
+<p>The review explains each artifact’s functionality, the problems found, and the reasoning behind each change in plain language for a peer or manager audience.</p>
+<h3>Algorithmic solutions and trade-offs</h3>
+<p>The reviews module changes remove duplicated logic, add filtering and sorting, and move the average calculation into SQL. Computing the average on demand instead of caching it was a deliberate trade-off.</p>
+<h3>Well-founded techniques</h3>
+<p>A database-level unique constraint, pagination, centralized helper functions, and consistent error handling and logging are established practices that make the code more robust and maintainable.</p>
+<h3>Security mindset</h3>
+<p>Restricting CORS, validating input, handling errors without exposing internal details, and enforcing integrity in the database all come from looking at the code the way an attacker or a failing system would.</p>
+</section>
+<section>
+<h2>Closing</h2>
+<p>Across all three categories, XPLR had solid foundations, such as library-based password hashing and parameterized queries. The consistent gaps were error handling, input validation, database-level integrity, and, for algorithms, any real processing of stored data. Each enhancement addresses those gaps directly, and the enhanced code appears alongside the original code in the ePortfolio.</p>
+</section>
+<p>The code discussed here appears in the enhancement pages: <a href="enhancement1.html">Enhancement 1</a>, <a href="enhancement2.html">Enhancement 2</a>, and <a href="enhancement3.html">Enhancement 3</a>.</p>
+
+</main>
+<footer>
+  <div class="wrap"><p>&copy; Lyth Hammad &middot; CS 499: Computer Science Capstone</p></div>
+</footer>
+</body>
+</html>
